@@ -247,29 +247,32 @@ class Merge {
     }
     assignMaxDate(doc, folder)
     if (folder) {
-      doc._rev = folder._rev
-      if (doc.tags == null) { doc.tags = folder.tags || [] }
-      if (doc.remote == null) { doc.remote = folder.remote }
-      if (doc.ino == null && folder.ino) { doc.ino = folder.ino }
-
-      const upToDate = sameFolder(folder, doc)
-      const idConflict = upToDate ? null : detectIdConflict(doc, folder)
-
-      if (upToDate) {
-        log.info({path}, 'up to date')
-        return null
-      } else if (idConflict != null) {
-        // TODO:
-        // - from remote side: don't sync doc locally
-        // - from local side: sync doc remotely & prevent folder from future
-        //   local sync until conflict is resolved by user
-        this.events.emit('id-conflict', idConflict)
-        return
+      if (detectIdConflict(doc, folder)) {
+        if (side === 'remote') {
+          // Rename the new remote dir so it will get synced on next polling
+          await this.resolveConflictAsync('remote', doc, folder)
+          return
+        } else {
+          // Rename the existing remote dir so it will get synced on next polling
+          await this.resolveConflictAsync('remote', folder, doc)
+          // But do not return so its metadata gets overridden with the local one.
+          // So the local dir will get synced remotely after merge.
+          // And the remote dir will still get synced on next polling.
+          // Hence the _rev highjacking (so the Pouc doesn't complain).
+          doc._rev = folder._rev
+        }
       } else {
-        return this.pouch.put(doc)
+        doc._rev = folder._rev
+        if (doc.tags == null) { doc.tags = folder.tags || [] }
+        if (doc.remote == null) { doc.remote = folder.remote }
+        if (doc.ino == null && folder.ino) { doc.ino = folder.ino }
+
+        if (sameFolder(folder, doc)) {
+          log.info({path}, 'up to date')
+          return null
+        }
       }
     }
-    if (doc.tags == null) { doc.tags = [] }
     await this.ensureParentExistAsync(side, doc)
     return this.pouch.put(doc)
   }

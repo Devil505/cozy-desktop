@@ -202,21 +202,23 @@ describe('Merge', function () {
 
     context('when folder could not coexist on Windows & macOS with one already in the Pouch', () => {
       onPlatforms('win32', 'darwin', () => {
-        it('emits an identity conflict without saving the folder', async function () {
+        // TODO: test both sides
+        it('resolves the conflict', async function () {
+          this.merge.remote = {renameConflictingDocAsync: async () => {}}
+          const renameConflictingDocAsync = sinon.stub(this.merge.remote, 'renameConflictingDocAsync').resolves()
           const alfred = await builders.dir().path('alfred').create()
           const Alfred = await builders.dir().path('Alfred').build()
-          const emit = sinon.spy(this.merge.events, 'emit')
 
           await this.merge.putFolderAsync(this.side, Alfred)
 
-          should(await this.pouch.db.get(Alfred._id)).deepEqual(alfred)
-          should(emit).have.been.calledOnce()
-          should(emit.args[0][0]).equal('id-conflict')
-          should(emit.args[0][1]).deepEqual({
-            _id: alfred._id,
-            paths: new Set([alfred.path, Alfred.path]),
-            platform: process.platform
-          })
+          // FIXME
+          // should(await this.pouch.db.get(alfred._id)).deepEqual(
+          //   _.defaults({_rev: alfred._rev}, Alfred)
+          // )
+          should(renameConflictingDocAsync).have.been.calledOnce()
+          const [doc, dstPath] = renameConflictingDocAsync.args[0]
+          should(doc.path).equal(alfred.path)
+          should(dstPath).match(/alfred-conflict/)
         })
       })
 
