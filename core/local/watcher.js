@@ -277,7 +277,8 @@ module.exports = class LocalWatcher {
 
       if (e.type === 'add' || e.type === 'change') {
         if (initialScan && e2.old &&
-          sameDate(fromDate(e2.old.updated_at), fromDate(e2.stats.mtime))) {
+          sameDate(fromDate(e2.old.updated_at), fromDate(e2.stats.mtime)) &&
+          e2.path === e2.old.path) {
           log.trace({path: e.path}, 'Do not compute checksum : mtime is unchanged')
           e2.md5sum = e2.old.md5sum
         } else {
