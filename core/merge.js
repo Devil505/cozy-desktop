@@ -135,11 +135,29 @@ class Merge {
       if (err.status !== 404) { log.warn({path, err}) }
     }
     markSide(side, doc, file)
-    if (file && file.docType === 'folder') {
+    const idConflict = file && detectIdConflict(doc, file)
+    if (file && idConflict) {
+      // if (side === 'remote') {
+      //   // Rename the new remote dir so it will get synced on next polling
+      //   await this.resolveConflictAsync('remote', doc, file)
+      //   return
+      // } else {
+
+      // Rename the existing remote file so it will get synced on next polling
+      await this.resolveConflictAsync('remote', file, doc)
+      // But do not return so its metadata gets overridden with the local one.
+      // So the local file will get synced remotely after merge.
+      // And the remote file will still get synced on next polling.
+      // Hence the _rev highjacking (so the Pouch doesn't complain).
+      doc._rev = file._rev
+      delete doc.remote
+      // }
+    } else if (file && file.docType === 'folder') {
       return this.resolveConflictAsync(side, doc, file)
     }
     assignMaxDate(doc, file)
     if (file && sameBinary(file, doc)) {
+      log.warn({doc, file}, 'sameBinary')
       doc._rev = file._rev
       if (doc.size == null) { doc.size = file.size }
       if (doc.class == null) { doc.class = file.class }
@@ -154,7 +172,7 @@ class Merge {
         return this.pouch.put(doc)
       }
     }
-    if (file) {
+    if (file && !idConflict) {
       if ((side === 'local') && (file.sides.local != null)) {
         return this.resolveInitialAddAsync(side, doc, file)
       } else {
